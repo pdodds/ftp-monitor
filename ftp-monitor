@@ -1,0 +1,180 @@
+#!/usr/bin/ruby
+
+require 'net/ftp'
+require 'net/smtp'
+require 'yaml'
+require 'fileutils'
+
+definition = YAML::load(File.open('monitors.yml'))
+
+class LocalLogger
+
+        
+
+	def initialize(definition)
+		@definition = definition
+		@last_50_messages = []
+      		@name = definition["id"]
+   	end
+
+	def info(message)
+		write "#{DateTime.now} | info | "+message
+	end
+	
+	def error(exception)
+ 		write "#{DateTime.now} | error | "+exception.message
+		write exception.backtrace.inspect  
+		send_email(exception) if @definition['email_on_error'] == true
+	end
+
+	private
+
+	def send_email(exception)
+		write "#{DateTime.now} | error | sending e-mail to #{@definition['email_to_alias']} (#{@definition['email_to']})"
+		msg = <<END_OF_MESSAGE
+From: #{@definition['email_from_alias']} <#{@definition['email_from']}>
+To: #{@definition['email_to_alias']} <#{@definition['email_to']}>
+Subject: An exception has occurred #{exception.message}
+
+Here is the backtrace
+
+#{exception.backtrace.inspect}
+
+Here is a dump of the recent log
+
+#{@last_50_messages.join("\n")}
+END_OF_MESSAGE
+
+		Net::SMTP.start('localhost') do |smtp|
+			smtp.send_message msg, @definition['email_from'], @definition['email_to']
+		end
+	end
+
+	def write(message)
+		if (@last_50_messages.size == 50)
+			@last_50_messages = @last_50_messages[1,49]	
+		end
+		@last_50_messages << message
+		File.open("#{@name}.log", 'a') {|f| f.write(message) }
+ 		puts message
+	end
+
+end	
+
+class FTPMonitor
+
+	def start(definition)
+		@definition = definition
+		@logger = LocalLogger.new(@definition)
+		@logger.info "Starting FTP monitor for #{@definition['name']}"
+		begin
+			while true
+                                process_directories
+
+				@logger.info "Sleeping for #{@definition['sleeptime']} seconds"
+				sleep(definition['sleeptime'])
+				@logger.info "Waking up"
+			end
+		rescue Exception => e  
+
+		   @logger.error e
+
+		end
+	end
+
+	private
+
+	def process_directories
+		begin
+			@logger.info "Connecting to #{@definition['ftp-server']} as #{@definition['username']}"
+			@ftp = Net::FTP.new(@definition['ftp-server'])
+			result = @ftp.login @definition['username'], @definition['password']
+			@logger.info "#{result}"
+
+			if @definition['passive'] = true
+				@ftp.passive = true 
+				@logger.info "Swiching to passive mode"
+			end
+
+			@definition["directories"].each do | directory | 
+				process_directory directory
+			end
+		rescue Exception => e  
+		   	@logger.error e
+		ensure
+		  	@logger.info "Disconnecting"
+			@ftp.close
+			@logger.info "Disconnected"
+		end
+	end
+
+        def has_downloaded? (directory,file)
+		if File.exists?("#{@definition['id']}-#{directory['id']}-downloads.txt")
+			expression = "#{file}\n"
+			File.open("#{@definition['id']}-#{directory['id']}-downloads.txt").each { |line|
+			    return true if line == expression
+			}
+		end
+		return false
+        end
+
+	def process_directory(directory)
+		@logger.info "Processing directory #{directory['id']}"	
+		@logger.info "Changing to remote path #{directory['remote_path']}"
+		result = @ftp.chdir directory['remote_path']
+		@logger.info "Getting file list #{directory['filename']}"
+		files = @ftp.nlst(directory['filename'])
+		@logger.info "Found #{files.size} files"
+		files.each do |file|
+			@logger.info "Processing file #{file}"
+
+			FileUtils.mkdir_p directory['local_path']
+
+			if directory['only_new'] == true
+				@logger.info "Checking to see if file #{file} has been downloaded before"
+				if has_downloaded?(directory,file)
+					@logger.info "Already downloaded, ignoring"
+				else
+					download_file directory,file
+					File.open("#{@definition['id']}-#{directory['id']}-downloads.txt", 'a') {|f| f.write("#{file}\n") }
+				end
+			else
+				download_file directory,file
+			end
+	
+			
+		end	
+	end
+
+	def download_file(directory,file)
+		local_file_path = "#{directory['local_path']}/#{file}"
+		if directory['ascii'] == true
+			@logger.info "Download #{file} as ascii to #{local_file_path}"
+			@ftp.gettextfile(file,local_file_path)	
+		else	
+			@logger.info "Download #{file} as binary to #{local_file_path}"
+			@ftp.getbinaryfile(file,local_file_path,1024)			
+		end
+
+		if (File.exists? local_file_path)
+				size = File.size(local_file_path)
+			@logger.info "File downloaded (#{local_file_path} #{size}bytes)"
+		else
+			@logger.error "File download failed!"
+		end
+
+		if directory['remove'] == true
+			@logger.info "Removing downloaded file from remote path"
+			result = @ftp.delete file
+			@logger.info result
+		end
+	end
+end
+
+# Loop through the definitions and kick them off
+definition['monitored'].each do |instance_definition|
+	thread = Thread.new do
+	     FTPMonitor.new.start(instance_definition)
+	end
+	thread.join
+end
