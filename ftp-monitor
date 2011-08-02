@@ -166,7 +166,7 @@ class FTPMonitor
 		if directory['remove'] == true
 			@logger.info "Removing downloaded file from remote path"
 			result = @ftp.delete file
-			@logger.info result
+			@logger.info "Removed remote file (#{result})"
 		end
 	end
 end
