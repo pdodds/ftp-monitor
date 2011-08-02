@@ -160,7 +160,7 @@ class FTPMonitor
 				size = File.size(local_file_path)
 			@logger.info "File downloaded (#{local_file_path} #{size}bytes)"
 		else
-			@logger.error "File download failed!"
+			@logger.error Exception.new "File download failed,  unable to find the downloaded file"
 		end
 
 		if directory['remove'] == true
