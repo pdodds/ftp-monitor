@@ -55,7 +55,7 @@ END_OF_MESSAGE
 			@last_50_messages = @last_50_messages[1,49]	
 		end
 		@last_50_messages << message
-		File.open("#{@name}.log", 'a') {|f| f.write(message) }
+		File.open("#{@name}.log", 'a') {|f| f.write("#{message}\n") }
  		puts message
 	end
 
