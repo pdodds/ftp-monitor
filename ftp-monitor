@@ -20,6 +20,10 @@ class LocalLogger
 	def info(message)
 		write "#{DateTime.now} | info | "+message
 	end
+
+	def warn(exception)
+ 		write "#{DateTime.now} | warn | "+exception.message
+	end
 	
 	def error(exception)
  		write "#{DateTime.now} | error | "+exception.message
@@ -123,7 +127,11 @@ class FTPMonitor
 		@logger.info "Changing to remote path #{directory['remote_path']}"
 		result = @ftp.chdir directory['remote_path']
 		@logger.info "Getting file list #{directory['filename']}"
-		files = @ftp.nlst(directory['filename'])
+		begin
+			files = @ftp.nlst(directory['filename'])
+		rescue Exception => e  
+			@logger.warn(e)
+		end
 		@logger.info "Found #{files.size} files"
 		files.each do |file|
 			@logger.info "Processing file #{file}"
