@@ -154,13 +154,16 @@ class FTPMonitor
 					end
 				else
 					download_file directory,file
+					downloaded_files << file
 				end
-			end	
+			end
+
+			if @definition['email_on_download'] == true && downloaded_files.size > 0
+			  send_download_mail(directory,downloaded_files)
+			end  		
 		end
 		
-		if @definition['email_on_download'] == true
-		  send_download_mail(directory,downloaded_files)
-		end  
+		
 	end
 	
 	def send_download_mail(directory,downloaded_files)
@@ -172,7 +175,7 @@ Subject: Files downloaded from #{directory['remote_path']}
 
 We have downloaded the following files:
 
-#{downloaded_files.join('\n')}
+#{downloaded_files.join("\n")}
 END_OF_MESSAGE
 
 		Net::SMTP.start('localhost') do |smtp|
