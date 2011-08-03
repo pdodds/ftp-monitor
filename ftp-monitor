@@ -132,6 +132,8 @@ class FTPMonitor
 		rescue Exception => e  
 			@logger.warn(e)
 		end
+		
+		downloaded_files = []
 
 		# Check to make sure we have a list of files or an empty list
 		if !files.nil?
@@ -148,11 +150,33 @@ class FTPMonitor
 					else
 						download_file directory,file
 						File.open("#{@definition['id']}-#{directory['id']}-downloads.txt", 'a') {|f| f.write("#{file}\n") }
+						downloaded_files << file
 					end
 				else
 					download_file directory,file
 				end
 			end	
+		end
+		
+		if @definition['email_on_download'] == true
+		  send_download_mail(directory,downloaded_files)
+		end  
+	end
+	
+	def send_download_email(directory,downloaded_files)
+		write "#{DateTime.now} | error | sending e-mail to #{@definition['email_to_alias']} (#{@definition['email_to']})"
+		msg = <<END_OF_MESSAGE
+From: #{@definition['email_from_alias']} <#{@definition['email_from']}>
+To: #{@definition['email_to_alias']} <#{@definition['email_to']}>
+Subject: Files downloaded from #{directory['remote_path']}
+
+We have downloaded the following files:
+
+#{downloaded_files.join('\n')}
+END_OF_MESSAGE
+
+		Net::SMTP.start('localhost') do |smtp|
+			smtp.send_message msg, @definition['email_from'], @definition['email_to']
 		end
 	end
 

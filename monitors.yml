@@ -9,6 +9,7 @@ monitored:
      password         : testpassword
      passive          : true
      email_on_error   : true
+     email_on_download: true
      email_from_alias : System
      email_from       : test@localhost
      email_to_alias   : System Support
