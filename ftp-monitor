@@ -163,8 +163,8 @@ class FTPMonitor
 		end  
 	end
 	
-	def send_download_email(directory,downloaded_files)
-		write "#{DateTime.now} | error | sending e-mail to #{@definition['email_to_alias']} (#{@definition['email_to']})"
+	def send_download_mail(directory,downloaded_files)
+		@logger.info "sending e-mail to #{@definition['email_to_alias']} (#{@definition['email_to']})"
 		msg = <<END_OF_MESSAGE
 From: #{@definition['email_from_alias']} <#{@definition['email_from']}>
 To: #{@definition['email_to_alias']} <#{@definition['email_to']}>
